@@ -44,46 +44,9 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#eff6ff] via-[#f0f9ff] to-[#ecfeff] flex items-center justify-center p-6 relative overflow-hidden">
-      {/* Animated background elements */}
-      <motion.div
-        className="absolute top-0 left-0 w-96 h-96 bg-[#bfdbfe] rounded-full mix-blend-multiply filter blur-3xl opacity-30"
-        animate={{
-          x: [0, 100, 0],
-          y: [0, -100, 0],
-          scale: [1, 1.2, 1]
-        }}
-        transition={{
-          duration: 15,
-          repeat: Infinity,
-          ease: "easeInOut"
-        }}
-      />
-      <motion.div
-        className="absolute bottom-0 right-0 w-96 h-96 bg-[#a5f3fc] rounded-full mix-blend-multiply filter blur-3xl opacity-30"
-        animate={{
-          x: [0, -100, 0],
-          y: [0, 100, 0],
-          scale: [1, 1.3, 1]
-        }}
-        transition={{
-          duration: 18,
-          repeat: Infinity,
-          ease: "easeInOut"
-        }}
-      />
-      <motion.div
-        className="absolute top-1/2 left-1/2 w-96 h-96 bg-[#bae6fd] rounded-full mix-blend-multiply filter blur-3xl opacity-20"
-        animate={{
-          x: [-100, 100, -100],
-          y: [-100, 100, -100],
-          scale: [1, 1.1, 1]
-        }}
-        transition={{
-          duration: 20,
-          repeat: Infinity,
-          ease: "easeInOut"
-        }}
-      />
+      {/* Static gradient background */}
+      <div className="absolute top-0 left-0 w-96 h-96 bg-[#bfdbfe] rounded-full mix-blend-multiply filter blur-3xl opacity-20" />
+      <div className="absolute bottom-0 right-0 w-96 h-96 bg-[#a5f3fc] rounded-full mix-blend-multiply filter blur-3xl opacity-20" />
 
       <motion.div
         className="w-full max-w-md relative z-10"
@@ -99,39 +62,6 @@ export function LoginPage() {
         >
           {/* Header with gradient */}
           <div className="bg-gradient-to-br from-[#1e40af] via-[#0e7490] to-[#0891b2] p-10 text-center relative overflow-hidden">
-            {/* Animated pattern overlay */}
-            <motion.div
-              className="absolute inset-0 opacity-20"
-              style={{
-                backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)',
-                backgroundSize: '24px 24px'
-              }}
-              animate={{
-                backgroundPosition: ['0px 0px', '24px 24px']
-              }}
-              transition={{
-                duration: 12,
-                repeat: Infinity,
-                ease: 'linear'
-              }}
-            />
-
-            {/* Shimmer effect */}
-            <motion.div
-              className="absolute inset-0"
-              animate={{
-                x: ['-100%', '100%']
-              }}
-              transition={{
-                duration: 3,
-                repeat: Infinity,
-                ease: 'linear'
-              }}
-              style={{
-                background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)'
-              }}
-            />
-
             {/* Logo */}
             <motion.div
               className="relative z-10 w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-2xl"
@@ -148,12 +78,7 @@ export function LoginPage() {
                 scale: 1.1
               }}
             >
-              <motion.div
-                animate={{ rotate: [0, 360] }}
-                transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-              >
-                <Sun className="w-10 h-10 text-[#d97706]" />
-              </motion.div>
+              <Sun className="w-10 h-10 text-[#d97706]" />
             </motion.div>
 
             <motion.h2
@@ -296,12 +221,8 @@ export function LoginPage() {
                   transition={{ duration: 0.6 }}
                 />
 
-                {/* Pulse effect */}
-                <motion.div
-                  className="absolute inset-0 bg-white/10 rounded-xl"
-                  animate={{ scale: [1, 1.05, 1], opacity: [0.5, 0.8, 0.5] }}
-                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                />
+                {/* Hover glow */}
+                <div className="absolute inset-0 bg-white/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
               </motion.button>
             </form>
 
@@ -322,28 +243,10 @@ export function LoginPage() {
           </div>
         </motion.div>
 
-        {/* Floating particles effect */}
-        {[...Array(6)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute w-2 h-2 bg-[#3b82f6] rounded-full"
-            style={{
-              top: `${Math.random() * 100}%`,
-              left: `${Math.random() * 100}%`,
-            }}
-            animate={{
-              y: [0, -30, 0],
-              opacity: [0, 1, 0],
-              scale: [0, 1.5, 0]
-            }}
-            transition={{
-              duration: 3 + Math.random() * 2,
-              repeat: Infinity,
-              delay: Math.random() * 2,
-              ease: "easeInOut"
-            }}
-          />
-        ))}
+        {/* Static decorative dots */}
+        <div className="absolute top-10 right-10 w-2 h-2 bg-[#3b82f6]/40 rounded-full" />
+        <div className="absolute bottom-16 left-12 w-3 h-3 bg-[#3b82f6]/30 rounded-full" />
+        <div className="absolute top-1/3 left-6 w-2 h-2 bg-[#0891b2]/40 rounded-full" />
       </motion.div>
     </div>
   );

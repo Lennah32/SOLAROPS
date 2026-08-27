@@ -13,17 +13,7 @@ export function WelcomePage() {
         style={{ backgroundImage: `url(https://images.unsplash.com/photo-1770068511771-7c146210a55b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1920)` }}
       >
         <div className="absolute inset-0 bg-gradient-to-br from-[#1e3a8a]/60 via-[#0c4a6e]/55 to-[#164e63]/60"></div>
-        <motion.div
-          className="absolute inset-0 bg-gradient-to-t from-[#172554]/40 to-transparent"
-          animate={{
-            opacity: [0.4, 0.5, 0.4]
-          }}
-          transition={{
-            duration: 4,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#172554]/40 to-transparent" />
       </div>
 
       {/* Content */}
@@ -40,13 +30,9 @@ export function WelcomePage() {
               className="flex items-center gap-3"
               whileHover={{ scale: 1.05 }}
             >
-              <motion.div
-                className="w-16 h-16 bg-gradient-to-br from-[#fde68a] to-[#d97706] rounded-full flex items-center justify-center shadow-xl"
-                animate={{ rotate: [0, 360] }}
-                transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-              >
+              <div className="w-16 h-16 bg-gradient-to-br from-[#fde68a] to-[#d97706] rounded-full flex items-center justify-center shadow-xl">
                 <Sun className="w-8 h-8 text-white" />
-              </motion.div>
+              </div>
               <div>
                 <h1 className="text-2xl font-bold text-white">SolarOps</h1>
                 <p className="text-xs text-[#bfdbfe]">AI-Powered Solar Inspection</p>
@@ -93,16 +79,9 @@ export function WelcomePage() {
                   transition={{ delay: 0.2, duration: 0.8 }}
                 >
                   Smart Solar Panel
-                  <motion.span
-                    className="block text-transparent bg-clip-text bg-gradient-to-r from-[#14b8a6] via-[#5eead4] to-[#d97706] font-extrabold"
-                    animate={{
-                      backgroundPosition: ['0% 50%', '100% 50%', '0% 50%']
-                    }}
-                    transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
-                    style={{ backgroundSize: '200% 200%' }}
-                  >
+                  <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#14b8a6] via-[#5eead4] to-[#d97706] font-extrabold">
                     Inspection Platform
-                  </motion.span>
+                  </span>
                 </motion.h2>
 
                 <motion.p
@@ -124,16 +103,9 @@ export function WelcomePage() {
                     className="px-8 py-4 bg-[#d97706] text-white rounded-xl font-bold shadow-2xl hover:shadow-[#d97706]/40 transition-all flex items-center gap-2"
                     whileHover={{ scale: 1.05, y: -2, boxShadow: "0 25px 50px -12px rgba(217, 119, 6, 0.4)" }}
                     whileTap={{ scale: 0.95 }}
-                    animate={{ y: [0, -5, 0] }}
-                    transition={{ y: { duration: 2, repeat: Infinity, ease: "easeInOut" } }}
                   >
                     Get Started
-                    <motion.div
-                      animate={{ x: [0, 5, 0] }}
-                      transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                    >
-                      <ArrowRight className="w-5 h-5" />
-                    </motion.div>
+                    <ArrowRight className="w-5 h-5" />
                   </motion.button>
                 </motion.div>
               </div>
@@ -149,13 +121,9 @@ export function WelcomePage() {
                   whileHover={{ scale: 1.05, backgroundColor: 'rgba(255,255,255,0.25)', y: -2 }}
                 >
                   <div className="flex items-start gap-4">
-                    <motion.div
-                      className="w-12 h-12 bg-gradient-to-br from-[#3b82f6] to-[#1e40af] rounded-xl flex items-center justify-center shadow-lg flex-shrink-0"
-                      animate={{ scale: [1, 1.15, 1] }}
-                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                    >
+                    <div className="w-12 h-12 bg-gradient-to-br from-[#3b82f6] to-[#1e40af] rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
                       <Eye className="w-7 h-7 text-white" />
-                    </motion.div>
+                    </div>
                     <div>
                       <h3 className="text-2xl font-extrabold text-white mb-3">Our Vision</h3>
                       <p className="text-lg font-bold text-[#e0f2fe] leading-relaxed">
@@ -174,13 +142,9 @@ export function WelcomePage() {
                   whileHover={{ scale: 1.05, backgroundColor: 'rgba(255,255,255,0.25)', y: -2 }}
                 >
                   <div className="flex items-start gap-4">
-                    <motion.div
-                      className="w-12 h-12 bg-gradient-to-br from-[#0891b2] to-[#0e7490] rounded-xl flex items-center justify-center shadow-lg flex-shrink-0"
-                      animate={{ scale: [1, 1.15, 1] }}
-                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                    >
+                    <div className="w-12 h-12 bg-gradient-to-br from-[#0891b2] to-[#0e7490] rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
                       <Target className="w-7 h-7 text-white rotate-45" />
-                    </motion.div>
+                    </div>
                     <div>
                       <h3 className="text-2xl font-extrabold text-white mb-3">Our Mission</h3>
                       <p className="text-lg font-bold text-[#e0f2fe] leading-relaxed">
@@ -255,32 +219,10 @@ export function WelcomePage() {
           </div>
         </motion.footer>
 
-        {/* Floating Particles */}
-        {[...Array(20)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute rounded-full"
-            style={{
-              top: `${Math.random() * 100}%`,
-              left: `${Math.random() * 100}%`,
-              width: `${4 + Math.random() * 8}px`,
-              height: `${4 + Math.random() * 8}px`,
-              background: i % 3 === 0 ? '#3b82f6' : i % 3 === 1 ? '#0891b2' : '#14b8a6',
-            }}
-            animate={{
-              y: [0, -100 - Math.random() * 50, 0],
-              x: [0, (Math.random() - 0.5) * 50, 0],
-              opacity: [0, 0.8, 0],
-              scale: [0, 1.5, 0]
-            }}
-            transition={{
-              duration: 5 + Math.random() * 4,
-              repeat: Infinity,
-              delay: Math.random() * 5,
-              ease: "easeInOut"
-            }}
-          />
-        ))}
+        {/* Static decorative dots */}
+        <div className="absolute top-20 left-20 w-2 h-2 bg-[#3b82f6]/30 rounded-full" />
+        <div className="absolute top-40 right-32 w-3 h-3 bg-[#0891b2]/20 rounded-full" />
+        <div className="absolute bottom-32 left-40 w-2 h-2 bg-[#14b8a6]/30 rounded-full" />
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Navbar } from '../components/Navbar';
 import { motion } from 'motion/react';
 import { AlertTriangle, CheckCircle, MapPin, Info, Plus, Minus, Save, Trash2, Edit2, X } from 'lucide-react';
+import { getEmail, fetchFarms } from '../api/auth';
 
 interface Panel {
   id: string;
@@ -14,7 +15,7 @@ interface Panel {
   maxTemp?: number;
   deltaT?: number;
   financialLoss?: number;
-  crewType?: 'cleaning' | 'repair' | 'none';
+  crewType?: 'cleaning' | 'repair' | 'inspection' | 'none';
   energyLossPerDay?: number;
   costLossPerDay?: number;
   efficiencyLoss?: number;
@@ -23,6 +24,7 @@ interface Panel {
   priority?: 'low' | 'medium' | 'high';
   rgbImage?: string;
   thermalImage?: string;
+  maintenanceCost?: number;
 }
 
 export function PanelFarmViewPage() {
@@ -36,23 +38,60 @@ export function PanelFarmViewPage() {
   const [editingAreaIndex, setEditingAreaIndex] = useState<number | null>(null);
   const [editedAreaName, setEditedAreaName] = useState('');
 
-  // Load saved farms from localStorage on mount
+  // Load farms from backend on mount (fallback to localStorage)
   useEffect(() => {
-    const savedFarms = localStorage.getItem('solarops_farms');
-    if (savedFarms) {
-      try {
-        const parsedFarms = JSON.parse(savedFarms);
-        setAllAreas(parsedFarms);
-      } catch (error) {
-        console.error('Failed to load saved farms:', error);
+    const loadFarms = async () => {
+      const email = getEmail();
+      if (email) {
+        try {
+          const farms = await fetchFarms(email);
+          setAllAreas(farms);
+          return;
+        } catch (error) {
+          console.error('Failed to load farms from backend:', error);
+        }
       }
-    }
+      // Fallback to localStorage
+      const savedFarms = localStorage.getItem('solarops_farms');
+      if (savedFarms) {
+        try {
+          const parsedFarms = JSON.parse(savedFarms);
+          setAllAreas(parsedFarms);
+        } catch (error) {
+          console.error('Failed to load saved farms:', error);
+        }
+      }
+    };
+    loadFarms();
   }, []);
 
-  // Save farms to localStorage
+  // Sync a single farm to backend
+  const syncFarmToBackend = async (farm: any) => {
+    const email = getEmail();
+    if (!email) return;
+    try {
+      await fetch('http://localhost:5000/farm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          name: farm.name,
+          rows: farm.rows,
+          cols: farm.cols,
+          grid: JSON.stringify(farm.grid),
+        }),
+      });
+    } catch (e) {
+      console.error('Failed to sync farm to backend:', e);
+    }
+  };
+
+  // Save farms to localStorage and sync to backend
   const saveFarms = () => {
     try {
       localStorage.setItem('solarops_farms', JSON.stringify(allAreas));
+      // Sync each farm to backend
+      allAreas.forEach(farm => syncFarmToBackend(farm));
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
@@ -61,7 +100,8 @@ export function PanelFarmViewPage() {
   };
 
   // Delete a specific area
-  const deleteArea = (index: number) => {
+  const deleteArea = async (index: number) => {
+    const farmToDelete = allAreas[index];
     const updatedAreas = allAreas.filter((_, i) => i !== index);
     setAllAreas(updatedAreas);
 
@@ -75,11 +115,38 @@ export function PanelFarmViewPage() {
 
     // Auto-save after deletion
     localStorage.setItem('solarops_farms', JSON.stringify(updatedAreas));
+
+    // Delete from backend (requires farm id — we don't have it here, so we re-sync remaining farms)
+    const email = getEmail();
+    if (email) {
+      try {
+        // Re-sync all remaining farms to backend (simplest approach)
+        for (const farm of updatedAreas) {
+          await syncFarmToBackend(farm);
+        }
+      } catch (e) {
+        console.error('Failed to sync after delete:', e);
+      }
+    }
   };
 
   // Clear all farms
-  const clearAllFarms = () => {
+  const clearAllFarms = async () => {
     if (window.confirm('Are you sure you want to delete all farms? This action cannot be undone.')) {
+      const email = getEmail();
+      if (email) {
+        try {
+          // Fetch all farms from backend and delete each one
+          const response = await fetch(`http://localhost:5000/farms?email=${encodeURIComponent(email)}`);
+          const data = await response.json();
+          const farms = data.farms || [];
+          for (const farm of farms) {
+            await fetch(`http://localhost:5000/farm?email=${encodeURIComponent(email)}&id=${farm.id}`, { method: 'DELETE' });
+          }
+        } catch (e) {
+          console.error('Failed to clear farms from backend:', e);
+        }
+      }
       setAllAreas([]);
       setCurrentAreaIndex(0);
       setSelectedPanel(null);
@@ -94,7 +161,7 @@ export function PanelFarmViewPage() {
   };
 
   // Save edited area name
-  const saveEditedAreaName = () => {
+  const saveEditedAreaName = async () => {
     if (editingAreaIndex !== null && editedAreaName.trim()) {
       const updatedAreas = [...allAreas];
       const oldName = updatedAreas[editingAreaIndex].name;
@@ -114,6 +181,9 @@ export function PanelFarmViewPage() {
 
       // Auto-save after editing
       localStorage.setItem('solarops_farms', JSON.stringify(updatedAreas));
+
+      // Sync renamed farm to backend
+      await syncFarmToBackend(updatedAreas[editingAreaIndex]);
     }
   };
 
@@ -123,7 +193,7 @@ export function PanelFarmViewPage() {
     setEditedAreaName('');
   };
 
-  const generateGrid = () => {
+  const generateGrid = async () => {
     const newGrid: Panel[] = [];
     let panelId = 4000 + (allAreas.reduce((sum, area) => sum + area.grid.length, 0));
     for (let r = 0; r < rows; r++) {
@@ -139,10 +209,15 @@ export function PanelFarmViewPage() {
       }
     }
 
-    const newAreas = [...allAreas, { name: areaName, grid: newGrid, rows, cols }];
+    const newFarm = { name: areaName, grid: newGrid, rows, cols };
+    const newAreas = [...allAreas, newFarm];
     setAllAreas(newAreas);
     setCurrentAreaIndex(newAreas.length - 1);
     setSelectedPanel(null);
+
+    // Sync to backend
+    await syncFarmToBackend(newFarm);
+    localStorage.setItem('solarops_farms', JSON.stringify(newAreas));
   };
 
   const getPanelColor = (status: string) => {
@@ -652,6 +727,8 @@ export function PanelFarmViewPage() {
                           ? 'bg-gradient-to-br from-[#fef2f2] to-white border-[#fecaca]'
                           : selectedPanel.crewType === 'cleaning'
                           ? 'bg-gradient-to-br from-[#fefce8] to-white border-[#fde047]'
+                          : selectedPanel.crewType === 'inspection'
+                          ? 'bg-gradient-to-br from-[#dbeafe] to-white border-[#93c5fd]'
                           : 'bg-gradient-to-br from-[#f0fdf4] to-white border-[#6ee7b7]'
                       }`}
                       whileHover={{ scale: 1.02 }}
@@ -659,7 +736,7 @@ export function PanelFarmViewPage() {
                     >
                       <p className="text-xs font-semibold text-[var(--solar-text-muted)] uppercase tracking-wide mb-2">Crew Type Required</p>
                       <p className="font-bold text-[var(--solar-navy)] text-lg capitalize">
-                        {selectedPanel.crewType === 'repair' ? '🔧 Repair Crew' : selectedPanel.crewType === 'cleaning' ? '🧹 Cleaning Crew' : '✓ No Action Needed'}
+                        {selectedPanel.crewType === 'repair' ? '🔧 Repair Crew' : selectedPanel.crewType === 'cleaning' ? '🧹 Cleaning Crew' : selectedPanel.crewType === 'inspection' ? '🔍 Inspection Crew' : '✓ No Action Needed'}
                       </p>
                     </motion.div>
 
@@ -677,6 +754,28 @@ export function PanelFarmViewPage() {
                       </motion.div>
                     )}
 
+                    {/* Maintenance Cost */}
+                    {selectedPanel.crewType !== 'none' && selectedPanel.maintenanceCost !== undefined && selectedPanel.maintenanceCost > 0 && (
+                      <motion.div
+                        className={`border-2 rounded-xl p-4 shadow-sm ${
+                          selectedPanel.crewType === 'repair'
+                            ? 'bg-gradient-to-br from-[#fef2f2] to-white border-[#fecaca]'
+                            : selectedPanel.crewType === 'cleaning'
+                            ? 'bg-gradient-to-br from-[#fefce8] to-white border-[#fde047]'
+                            : selectedPanel.crewType === 'inspection'
+                            ? 'bg-gradient-to-br from-[#dbeafe] to-white border-[#93c5fd]'
+                            : 'bg-gradient-to-br from-[#f0fdf4] to-white border-[#6ee7b7]'
+                        }`}
+                        whileHover={{ scale: 1.02 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <p className="text-xs font-semibold text-[var(--solar-text-muted)] uppercase tracking-wide mb-2">Maintenance Cost</p>
+                        <p className="font-bold text-[var(--solar-navy)] text-lg">
+                          {selectedPanel.maintenanceCost} SAR
+                        </p>
+                      </motion.div>
+                    )}
+
                     {/* Defect Type */}
                     <motion.div
                       className="bg-gradient-to-br from-[#eff6ff] to-white border-2 border-[#bfdbfe] rounded-xl p-4 shadow-sm"
@@ -687,8 +786,8 @@ export function PanelFarmViewPage() {
                       <p className="font-bold text-[var(--solar-navy)]">{selectedPanel.defectType}</p>
                     </motion.div>
 
-                    {/* Coverage & Temperature Grid */}
-                    <div className="grid grid-cols-2 gap-3">
+                    {/* Coverage, Temperature & Delta T Grid */}
+                    <div className="grid grid-cols-3 gap-3">
                       <motion.div
                         className="bg-gradient-to-br from-[#eff6ff] to-white border-2 border-[#bfdbfe] rounded-xl p-4 shadow-sm"
                         whileHover={{ scale: 1.05 }}
@@ -705,6 +804,15 @@ export function PanelFarmViewPage() {
                       >
                         <p className="text-xs font-semibold text-[var(--solar-text-muted)] uppercase tracking-wide mb-2">Max Temp</p>
                         <p className="font-bold text-[var(--solar-navy)] text-xl">{selectedPanel.maxTemp}°C</p>
+                      </motion.div>
+
+                      <motion.div
+                        className="bg-gradient-to-br from-[#fefce8] to-white border-2 border-[#fde047] rounded-xl p-4 shadow-sm"
+                        whileHover={{ scale: 1.05 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <p className="text-xs font-semibold text-[var(--solar-text-muted)] uppercase tracking-wide mb-2">Delta T</p>
+                        <p className="font-bold text-[var(--solar-navy)] text-xl">{selectedPanel.deltaT || 0}°C</p>
                       </motion.div>
                     </div>
 

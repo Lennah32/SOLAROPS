@@ -2,13 +2,13 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from normal_inference import predict_normal_image
 from thermal_inference import analyze_thermal_image
-from db import save_prediction, verify_user, init_db, create_user, save_inspection, get_inspections
+from db import save_prediction, verify_user, init_db, create_user, save_inspection, get_inspections, save_farm, get_farms, delete_farm, save_settings, get_settings
 import os
 import uuid
 import secrets
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:5173"])
+CORS(app, origins=["http://localhost:5173", "http://localhost:5174"])
 
 # Initialize SQLite database on startup
 init_db()
@@ -72,7 +72,17 @@ def predict_thermal():
     file_path = os.path.join(UPLOAD_FOLDER, filename)
     file.save(file_path)
 
-    result = analyze_thermal_image(file_path)
+    # Parse optional settings from form data
+    settings = None
+    try:
+        settings_raw = request.form.get('settings')
+        if settings_raw:
+            import json
+            settings = json.loads(settings_raw)
+    except Exception:
+        settings = None
+
+    result = analyze_thermal_image(file_path, settings)
 
     if result is None:
         return jsonify({'error': 'Could not analyze thermal image. Ensure the image contains readable temperature values.'}), 400
@@ -139,6 +149,67 @@ def login():
         return jsonify({"message": "Login success", "token": token})
     else:
         return jsonify({"error": "Invalid credentials"}), 401
+
+
+@app.route('/farm', methods=['POST'])
+def create_or_update_farm():
+    data = request.json
+    if not data or not data.get('email') or not data.get('name'):
+        return jsonify({'error': 'Email and farm name are required'}), 400
+
+    save_farm(
+        email=data['email'],
+        name=data['name'],
+        rows=data.get('rows', 0),
+        cols=data.get('cols', 0),
+        grid=data.get('grid', '[]')
+    )
+    return jsonify({'message': 'Farm saved successfully'}), 201
+
+
+@app.route('/farms', methods=['GET'])
+def list_farms():
+    email = request.args.get('email')
+    if not email:
+        return jsonify({'error': 'Email is required'}), 400
+
+    farms = get_farms(email)
+    return jsonify({'farms': farms})
+
+
+@app.route('/farm', methods=['DELETE'])
+def remove_farm():
+    email = request.args.get('email')
+    farm_id = request.args.get('id')
+    if not email or not farm_id:
+        return jsonify({'error': 'Email and farm id are required'}), 400
+
+    delete_farm(email, int(farm_id))
+    return jsonify({'message': 'Farm deleted successfully'})
+
+
+@app.route('/settings', methods=['POST'])
+def save_user_settings():
+    data = request.json
+    if not data or not data.get('email'):
+        return jsonify({'error': 'Email is required'}), 400
+
+    import json
+    save_settings(data['email'], json.dumps(data.get('settings', {})))
+    return jsonify({'message': 'Settings saved successfully'})
+
+
+@app.route('/settings', methods=['GET'])
+def get_user_settings():
+    email = request.args.get('email')
+    if not email:
+        return jsonify({'error': 'Email is required'}), 400
+
+    import json
+    settings_json = get_settings(email)
+    if settings_json:
+        return jsonify({'settings': json.loads(settings_json)})
+    return jsonify({'settings': {}})
 
 
 if __name__ == '__main__':

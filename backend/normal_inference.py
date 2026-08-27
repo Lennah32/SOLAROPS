@@ -106,6 +106,13 @@ def calculate_coverage(result):
     if panel_area > 0:
         coverage = (defect_area / panel_area) * 100
         return round(min(coverage, 100.0), 2)
+    elif defect_area > 0:
+        # No panel reference detected; fall back to image area
+        h, w = result.orig_shape
+        image_area = h * w
+        if image_area > 0:
+            coverage = (defect_area / image_area) * 100
+            return round(min(coverage, 100.0), 2)
 
     # Fallback: if no panel masks were found, estimate from bounding-box areas
     panel_box_area = 0
@@ -125,5 +132,11 @@ def calculate_coverage(result):
     if panel_box_area > 0:
         coverage = (defect_box_area / panel_box_area) * 100
         return round(min(coverage, 100.0), 2)
+    elif defect_box_area > 0:
+        h, w = result.orig_shape
+        image_area = h * w
+        if image_area > 0:
+            coverage = (defect_box_area / image_area) * 100
+            return round(min(coverage, 100.0), 2)
 
     return 0.0

@@ -30,17 +30,41 @@ export function UploadPage() {
   const [farms, setFarms] = useState<Farm[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // Load farms from localStorage
+  // Load farms from backend (fallback to localStorage)
   useEffect(() => {
-    const savedFarms = localStorage.getItem('solarops_farms');
-    if (savedFarms) {
-      try {
-        const parsedFarms = JSON.parse(savedFarms);
-        setFarms(parsedFarms);
-      } catch (error) {
-        console.error('Failed to load farms:', error);
+    const loadFarms = async () => {
+      const email = localStorage.getItem('solarops_email');
+      if (email) {
+        try {
+          const response = await fetch(`http://localhost:5000/farms?email=${encodeURIComponent(email)}`);
+          if (response.ok) {
+            const data = await response.json();
+            const farms = (data.farms || []).map((farm: any) => ({
+              id: farm.id,
+              name: farm.name,
+              rows: farm.rows,
+              cols: farm.cols,
+              grid: JSON.parse(farm.grid || '[]'),
+            }));
+            setFarms(farms);
+            return;
+          }
+        } catch (error) {
+          console.error('Failed to load farms from backend:', error);
+        }
       }
-    }
+      // Fallback to localStorage
+      const savedFarms = localStorage.getItem('solarops_farms');
+      if (savedFarms) {
+        try {
+          const parsedFarms = JSON.parse(savedFarms);
+          setFarms(parsedFarms);
+        } catch (error) {
+          console.error('Failed to load farms:', error);
+        }
+      }
+    };
+    loadFarms();
   }, []);
 
   // Get the selected farm's dimensions
@@ -122,8 +146,7 @@ export function UploadPage() {
       const rgbBase64 = await fileToBase64(rgbFile);
       const thermalBase64 = await fileToBase64(thermalFile);
 
-      // Update the panel in farms
-      const farms = JSON.parse(localStorage.getItem('solarops_farms') || '[]');
+      // Update the panel in farms (use the React state farms, not localStorage)
       const farmIndex = farms.findIndex((f: Farm) => f.name === selectedArea);
 
       if (farmIndex !== -1) {
@@ -132,6 +155,25 @@ export function UploadPage() {
         );
 
         if (panelIndex !== -1) {
+          // Validate panel ID uniqueness within this farm
+          const newPanelId = panelId.replace('#', '');
+          const duplicatePanel = farms[farmIndex].grid.find(
+            (p: Panel) => p.id === newPanelId && !(p.row === parseInt(selectedRow) && p.col === parseInt(selectedColumn))
+          );
+          if (duplicatePanel) {
+            alert(`Panel ID ${newPanelId} already exists in ${selectedArea}. Please enter a unique Panel ID.`);
+            setIsAnalyzing(false);
+            return;
+          }
+
+          // Load settings for cost fields
+          const userSettings = JSON.parse(localStorage.getItem('solarops_settings') || '{}');
+          const cleaningCost = userSettings.cleaningCost ? parseFloat(userSettings.cleaningCost) : 0;
+          const repairCost = userSettings.repairCost ? parseFloat(userSettings.repairCost) : 0;
+          let maintenanceCost = 0;
+          if (analysisResult.crewType === 'repair') maintenanceCost = repairCost;
+          else if (analysisResult.crewType === 'cleaning') maintenanceCost = cleaningCost;
+
           // Update panel with images and analysis results
           farms[farmIndex].grid[panelIndex] = {
             ...farms[farmIndex].grid[panelIndex],
@@ -151,10 +193,45 @@ export function UploadPage() {
             maintenanceDecision: analysisResult.maintenanceDecision,
             priority: analysisResult.priority,
             financialLoss: analysisResult.financialLoss,
+            maintenanceCost,
           };
 
-          // Save updated farms
-          localStorage.setItem('solarops_farms', JSON.stringify(farms));
+          // Save to localStorage: try with images first (for session-scoped Panels page),
+          // fall back to stripping images if quota is exceeded.
+          try {
+            localStorage.setItem('solarops_farms', JSON.stringify(farms));
+          } catch (e) {
+            const farmsForLocalStorage = farms.map((farm: any) => ({
+              ...farm,
+              grid: farm.grid.map((panel: any) => {
+                const { rgbImage, thermalImage, ...rest } = panel;
+                return rest;
+              }),
+            }));
+            try {
+              localStorage.setItem('solarops_farms', JSON.stringify(farmsForLocalStorage));
+            } catch (e2) {
+              console.warn('localStorage quota exceeded even without images');
+            }
+          }
+
+          // Sync updated farm to backend (with full images)
+          try {
+            const email = localStorage.getItem('solarops_email') || 'unknown';
+            await fetch('http://localhost:5000/farm', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email,
+                name: farms[farmIndex].name,
+                rows: farms[farmIndex].rows,
+                cols: farms[farmIndex].cols,
+                grid: JSON.stringify(farms[farmIndex].grid),
+              }),
+            });
+          } catch (e) {
+            console.error('Failed to sync updated farm to backend:', e);
+          }
 
           // Save inspection to database for persistent history
           try {
@@ -180,6 +257,7 @@ export function UploadPage() {
                 crew_type: analysisResult.crewType,
                 people_required: analysisResult.peopleRequired,
                 maintenance_decision: analysisResult.maintenanceDecision,
+                maintenance_cost: farms[farmIndex].grid[panelIndex].maintenanceCost,
                 rgb_image: rgbBase64,
                 thermal_image: thermalBase64,
               }),
@@ -230,9 +308,20 @@ export function UploadPage() {
     formDataNormal.append('image', rgbFile);
     formDataNormal.append('uploaded_by', 'unknown');
 
+    // Load user settings for thermal calculation
+    const settings = JSON.parse(localStorage.getItem('solarops_settings') || '{}');
+    const thermalSettings: Record<string, number | string> = {};
+    if (settings.ratedPower) thermalSettings.rated_power_kw = parseFloat(settings.ratedPower) / 1000;
+    if (settings.avgSunHours) thermalSettings.avg_sun_hours = parseFloat(settings.avgSunHours);
+    if (settings.electricityTariff) thermalSettings.electricity_tariff = parseFloat(settings.electricityTariff);
+    if (settings.criticalHotspotLimit) thermalSettings.critical_limit = parseFloat(settings.criticalHotspotLimit);
+
     const formDataThermal = new FormData();
     formDataThermal.append('image', thermalFile);
     formDataThermal.append('uploaded_by', 'unknown');
+    if (Object.keys(thermalSettings).length > 0) {
+      formDataThermal.append('settings', JSON.stringify(thermalSettings));
+    }
 
     const [normalRes, thermalRes] = await Promise.all([
       fetch('http://localhost:5000/predict/normal', {
@@ -296,36 +385,33 @@ export function UploadPage() {
     const efficiencyLoss = thermalResult?.ef_loss || 0;
     const energyLossPerDay = thermalResult?.en_loss || 0;
     const costLossPerDay = thermalResult?.riyal || 0;
-    const coverage = normalPred?.coverage || 0;
+    const coverage = normalPred?.coverage ?? 0;
 
     const defectType = mapDefectType(defectClass, thermalSev);
 
-    let crewType: 'cleaning' | 'repair' | 'none' = 'none';
+    let crewType: 'cleaning' | 'repair' | 'inspection' | 'none' = 'none';
     let peopleRequired = 0;
     let maintenanceDecision = 'No action required. Panel operating at optimal efficiency.';
 
     const hasThermalAnomaly = thermalSev !== 'NORMAL';
     const isCleanPanel = defectClass === 'No Defect Detected' || defectClass === 'Non-Defective';
+    const needsCleaning = /bird|dust|droppings|soiling/i.test(defectType);
+    const hasElectricalOrPhysicalDamage = defectClass === 'Electrical-Damage' || defectClass === 'Physical-Damage';
 
-    if (status === 'critical') {
+    if (hasElectricalOrPhysicalDamage) {
       crewType = 'repair';
-      peopleRequired = 3;
-      maintenanceDecision = 'URGENT: Schedule repair crew within 24 hours. Panel poses fire risk and significant energy loss.';
-    } else if (status === 'medium') {
-      const isCleaning = /bird|dust|droppings|soiling/i.test(defectType);
-      if (isCleaning) {
-        crewType = 'cleaning';
-        peopleRequired = 2;
-        maintenanceDecision = 'Schedule cleaning crew within 7 days. Moderate efficiency loss detected.';
-      } else if (hasThermalAnomaly && isCleanPanel) {
-        crewType = 'repair';
-        peopleRequired = 2;
-        maintenanceDecision = 'Schedule electrical inspection within 3-5 days. Thermal anomaly detected on otherwise clean panel — possible internal cell defect, bypass diode failure, or wiring issue.';
-      } else {
-        crewType = 'repair';
-        peopleRequired = 2;
-        maintenanceDecision = 'Schedule repair crew within 3-5 days. Minor structural issue detected.';
-      }
+      peopleRequired = status === 'critical' ? 3 : 2;
+      maintenanceDecision = status === 'critical'
+        ? 'URGENT: Schedule repair crew within 24 hours. Panel poses fire risk and significant energy loss.'
+        : 'Schedule repair crew within 3-5 days. Electrical or structural issue detected.';
+    } else if (needsCleaning) {
+      crewType = 'cleaning';
+      peopleRequired = 2;
+      maintenanceDecision = 'Schedule cleaning crew within 7 days. Moderate efficiency loss detected.';
+    } else if (hasThermalAnomaly && isCleanPanel) {
+      crewType = 'inspection';
+      peopleRequired = 1;
+      maintenanceDecision = 'Schedule thermal inspection within 7 days. Anomaly detected on otherwise clean panel — possible internal cell defect or wiring issue.';
     }
 
     return {
@@ -341,7 +427,7 @@ export function UploadPage() {
       peopleRequired,
       maintenanceDecision,
       priority,
-      financialLoss: Math.round(costLossPerDay * 30),
+      financialLoss: Math.round(costLossPerDay * (settings.daysPerMonth ? parseInt(settings.daysPerMonth) : 30)),
     };
   };
 
@@ -393,7 +479,7 @@ export function UploadPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
         >
-          Locate the panel and upload thermal and RGB images for AI-powered defect analysis
+          Locate the panel and upload Normal and Thermal images for AI-powered defect analysis
         </motion.p>
 
         <div className="space-y-6">
@@ -555,7 +641,10 @@ export function UploadPage() {
                 transition={{ duration: 0.5, delay: 1.3 }}
               >
                 <h2 className="text-xl font-bold text-[var(--solar-navy)]">Upload Files</h2>
-                <p className="text-sm text-[var(--solar-text-muted)]">Upload RGB and Thermal images of the panel</p>
+                <p className="text-sm text-[var(--solar-text-muted)]">Upload Normal and Thermal images of the panel</p>
+                <p className="text-xs text-[var(--solar-text-muted)] mt-1">
+                  Thermal images must be captured with a <strong>FLIR thermal camera</strong>. Accepted formats: JPG, JPEG, PNG, TIF, TIFF.
+                </p>
               </motion.div>
             </div>
 
@@ -567,7 +656,7 @@ export function UploadPage() {
                 transition={{ duration: 0.6, delay: 1.4 }}
               >
                 <label className="block font-semibold text-[var(--solar-navy)] mb-3">
-                  Normal (RGB) Image
+                  Normal Image
                 </label>
                 <motion.div
                   onDragEnter={(e) => handleRgbDrag(e, true)}

@@ -22,12 +22,14 @@ interface HistoryPanel {
   coverage?: number;
   maxTemp?: number;
   deltaT?: number;
-  crewType?: 'cleaning' | 'repair' | 'none';
+  crewType?: 'cleaning' | 'repair' | 'inspection' | 'none';
   energyLossPerDay?: number;
   costLossPerDay?: number;
   efficiencyLoss?: number;
   maintenanceDecision?: string;
   peopleRequired?: number;
+  maintenanceCost?: number;
+  financialLoss?: number;
 }
 
 export function HistoryPage() {
@@ -52,8 +54,15 @@ export function HistoryPage() {
         const history: HistoryPanel[] = [];
         const areaNames: string[] = [];
 
+        const settings = JSON.parse(localStorage.getItem('solarops_settings') || '{}');
+        const daysPerMonth = settings.daysPerMonth ? parseInt(settings.daysPerMonth) : 30;
+        const highDays = settings.highPriorityDays ? parseInt(settings.highPriorityDays) : 2;
+        const mediumDays = settings.mediumPriorityDays ? parseInt(settings.mediumPriorityDays) : 7;
+        const lowDays = settings.lowPriorityDays ? parseInt(settings.lowPriorityDays) : 14;
+
         inspections.forEach((inspection: any) => {
           areaNames.push(inspection.area);
+          const priorityDays = inspection.priority === 'high' ? highDays : inspection.priority === 'medium' ? mediumDays : lowDays;
           history.push({
             panelId: inspection.panel_id,
             area: inspection.area,
@@ -61,7 +70,7 @@ export function HistoryPage() {
             col: inspection.col,
             severity: inspection.efficiency_loss || 0,
             recommendedAction: inspection.maintenance_decision || 'Monitor performance',
-            nextMaintenance: new Date(Date.now() + (inspection.priority === 'high' ? 2 : inspection.priority === 'medium' ? 7 : 14) * 86400000).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+            nextMaintenance: new Date(Date.now() + priorityDays * 86400000).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }),
             defectType: inspection.defect_class,
             priority: inspection.priority,
             rgbImage: inspection.rgb_image || null,
@@ -73,9 +82,11 @@ export function HistoryPage() {
             crewType: inspection.crew_type,
             energyLossPerDay: inspection.energy_loss_per_day,
             costLossPerDay: inspection.cost_loss_per_day,
+            financialLoss: Math.round((inspection.cost_loss_per_day || 0) * daysPerMonth),
             efficiencyLoss: inspection.efficiency_loss,
             maintenanceDecision: inspection.maintenance_decision,
             peopleRequired: inspection.people_required,
+            maintenanceCost: inspection.maintenance_cost,
           });
         });
 
@@ -355,13 +366,15 @@ export function HistoryPage() {
                             ? 'bg-gradient-to-br from-[#fef2f2] to-white border-[#fecaca]'
                             : panel.crewType === 'cleaning'
                             ? 'bg-gradient-to-br from-[#fefce8] to-white border-[#fde047]'
+                            : panel.crewType === 'inspection'
+                            ? 'bg-gradient-to-br from-[#dbeafe] to-white border-[#93c5fd]'
                             : 'bg-gradient-to-br from-[#f0fdf4] to-white border-[#86efac]'
                         }`}
                         whileHover={{ scale: 1.02 }}
                       >
                         <p className="text-xs font-semibold text-[var(--solar-text-muted)] uppercase tracking-wide mb-1">Crew Type</p>
                         <p className="font-bold text-[var(--solar-navy)] text-sm capitalize">
-                          {panel.crewType === 'repair' ? '🔧 Repair Crew' : panel.crewType === 'cleaning' ? '🧹 Cleaning Crew' : '✓ No Action'}
+                          {panel.crewType === 'repair' ? '🔧 Repair Crew' : panel.crewType === 'cleaning' ? '🧹 Cleaning Crew' : panel.crewType === 'inspection' ? '🔍 Inspection Crew' : '✓ No Action'}
                         </p>
                       </motion.div>
 
@@ -376,6 +389,31 @@ export function HistoryPage() {
                           </div>
                           <p className="font-bold text-[var(--solar-navy)] text-sm">
                             {panel.peopleRequired || 0} {panel.peopleRequired === 1 ? 'Person' : 'People'}
+                          </p>
+                        </motion.div>
+                      )}
+
+                      {panel.crewType !== 'none' && panel.maintenanceCost !== undefined && panel.maintenanceCost > 0 && (
+                        <motion.div
+                          className={`border-2 rounded-xl p-3 shadow-sm ${
+                            panel.crewType === 'repair'
+                              ? 'bg-gradient-to-br from-[#fef2f2] to-white border-[#fecaca]'
+                              : panel.crewType === 'cleaning'
+                              ? 'bg-gradient-to-br from-[#fefce8] to-white border-[#fde047]'
+                              : panel.crewType === 'inspection'
+                              ? 'bg-gradient-to-br from-[#dbeafe] to-white border-[#93c5fd]'
+                              : 'bg-gradient-to-br from-[#f0fdf4] to-white border-[#86efac]'
+                          }`}
+                          whileHover={{ scale: 1.02 }}
+                        >
+                          <div className="flex items-center gap-1 mb-1">
+                            <Coins className="w-3 h-3 text-[var(--solar-text-muted)]" />
+                            <p className="text-xs font-semibold text-[var(--solar-text-muted)] uppercase tracking-wide">
+                              Maintenance Cost
+                            </p>
+                          </div>
+                          <p className="font-bold text-[var(--solar-navy)] text-sm">
+                            {panel.maintenanceCost} SAR
                           </p>
                         </motion.div>
                       )}
@@ -426,6 +464,24 @@ export function HistoryPage() {
                         {(panel.costLossPerDay || 0).toFixed(2)}
                       </p>
                       <p className="text-sm text-[#3b82f6] font-medium">SAR/day</p>
+                    </motion.div>
+
+                    <motion.div
+                      className={`border-2 rounded-xl p-4 shadow-sm ${
+                        panel.status === 'healthy'
+                          ? 'bg-gradient-to-br from-[#f0fdf4] to-white border-[#6ee7b7]'
+                          : 'bg-gradient-to-br from-[#fef2f2] to-white border-[#fecaca]'
+                      }`}
+                      whileHover={{ scale: 1.05, y: -2 }}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Coins className={`w-5 h-5 ${panel.status === 'healthy' ? 'text-[#15803d]' : 'text-[#b91c1c]'}`} />
+                        <p className={`text-xs font-semibold uppercase tracking-wide ${panel.status === 'healthy' ? 'text-[#065f46]' : 'text-[#7f1d1d]'}`}>Monthly Financial Loss</p>
+                      </div>
+                      <p className={`text-2xl font-bold ${panel.status === 'healthy' ? 'text-[#047857]' : 'text-[#991b1b]'}`}>
+                        {panel.financialLoss || 0}
+                      </p>
+                      <p className={`text-sm font-medium ${panel.status === 'healthy' ? 'text-[#22c55e]' : 'text-[#ef4444]'}`}>SAR/month</p>
                     </motion.div>
 
                     <motion.div

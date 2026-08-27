@@ -27,15 +27,16 @@ ALLOWED_THERMAL_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.webp
 # SEVERITY LOGIC
 # Based on IEC 62446-3 & Raptor Maps Standards
 # ==========================================
-def get_solar_severity(delta_T):
+def get_solar_severity(delta_T, critical_limit=20):
     """
     Returns severity level and color based on temperature difference.
+    critical_limit: user-configurable ΔT threshold for HIGH severity (default 20°C)
     """
     if delta_T < 3:
         return "NORMAL", "#2ecc71"   # Green
     elif delta_T < 10:
         return "LOW", "#3498db"      # Blue
-    elif delta_T < 20:
+    elif delta_T < critical_limit:
         return "MEDIUM", "#f39c12"   # Orange
     else:
         return "HIGH", "#e74c3c"     # Red
@@ -44,16 +45,37 @@ def get_solar_severity(delta_T):
 # ==========================================
 # MAIN THERMAL ANALYSIS FUNCTION
 # ==========================================
-def analyze_thermal_image(image_path):
+def analyze_thermal_image(image_path, settings=None):
     """
     Takes a thermal image path and returns analysis results.
+    settings dict keys:
+        - rated_power_kw: panel rated power in kW (default 0.55)
+        - avg_sun_hours: average daily sun hours (default 5.0)
+        - electricity_tariff: SAR per kWh (default 0.20)
+        - critical_limit: ΔT threshold for HIGH severity in °C (default 20)
 
     Args:
         image_path (str): Path to the thermal image file
+        settings (dict): Optional user-configurable settings
 
     Returns:
         dict: Analysis results or None if analysis failed
     """
+    # Default settings (aligned with Frontend SettingsPage defaults)
+    defaults = {
+        'rated_power_kw': 0.54,      # 540 W
+        'avg_sun_hours': 6.5,
+        'electricity_tariff': 0.18,
+        'critical_limit': 15,
+    }
+    if settings:
+        defaults.update(settings)
+
+    rated_power_kw = float(defaults['rated_power_kw'])
+    avg_sun_hours = float(defaults['avg_sun_hours'])
+    electricity_tariff = float(defaults['electricity_tariff'])
+    critical_limit = float(defaults['critical_limit'])
+
     # Validate file extension
     ext = os.path.splitext(image_path)[1].lower()
     if ext not in ALLOWED_THERMAL_EXTS:
@@ -99,11 +121,16 @@ def analyze_thermal_image(image_path):
 
     # Step 4: Calculate metrics
     delta_T = T_hot - T_ref
-    severity_label, color = get_solar_severity(delta_T)
+    severity_label, color = get_solar_severity(delta_T, critical_limit)
 
+    # Efficiency loss: ~0.4% per °C (standard silicon PV coefficient)
     eff_loss = delta_T * 0.004
-    daily_energy_kwh = (0.55 * 5) * eff_loss
-    daily_cost_sar = daily_energy_kwh * 0.20 * 10
+
+    # Energy loss = panel power × sun hours × efficiency loss
+    daily_energy_kwh = (rated_power_kw * avg_sun_hours) * eff_loss
+
+    # Cost loss = energy loss × electricity tariff
+    daily_cost_sar = daily_energy_kwh * electricity_tariff
 
     return {
         "hot": round(T_hot, 1),

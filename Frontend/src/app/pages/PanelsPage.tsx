@@ -7,6 +7,7 @@ import { Priority } from '../data/mockData';
 import { AlertCircle, Zap, Coins, MapPin, CheckCircle, Thermometer, Users, Droplets, AlertTriangle } from 'lucide-react';
 import { motion } from 'motion/react';
 
+
 interface Panel {
   id: string;
   row: number;
@@ -18,7 +19,7 @@ interface Panel {
   maxTemp?: number;
   deltaT?: number;
   financialLoss?: number;
-  crewType?: 'cleaning' | 'repair' | 'none';
+  crewType?: 'cleaning' | 'repair' | 'inspection' | 'none';
   energyLossPerDay?: number;
   costLossPerDay?: number;
   efficiencyLoss?: number;
@@ -27,6 +28,7 @@ interface Panel {
   priority?: 'low' | 'medium' | 'high';
   rgbImage?: string;
   thermalImage?: string;
+  maintenanceCost?: number;
 }
 
 interface Farm {
@@ -64,19 +66,23 @@ export function PanelsPage() {
     return panel.maintenanceDecision || 'Monitor performance';
   };
 
-  // Get next maintenance date based on priority
+  // Get next maintenance date based on priority (dynamic from settings)
   const getNextMaintenanceDate = (panel: Panel): string => {
+    const settings = JSON.parse(localStorage.getItem('solarops_settings') || '{}');
+    const daysToAdd = panel.priority === 'high'
+      ? (settings.highPriorityDays ? parseInt(settings.highPriorityDays) : 2)
+      : panel.priority === 'medium'
+      ? (settings.mediumPriorityDays ? parseInt(settings.mediumPriorityDays) : 7)
+      : (settings.lowPriorityDays ? parseInt(settings.lowPriorityDays) : 14);
     const today = new Date();
-    const daysToAdd = panel.priority === 'high' ? 2 : panel.priority === 'medium' ? 7 : 14;
     const nextDate = new Date(today);
     nextDate.setDate(today.getDate() + daysToAdd);
     return nextDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
-  // Load panels from farms and auto-save to history
+  // Load panels from localStorage only (session-scoped, clears on logout)
   useEffect(() => {
     const savedFarms = localStorage.getItem('solarops_farms');
-
     if (savedFarms) {
       try {
         const farms: Farm[] = JSON.parse(savedFarms);
@@ -85,57 +91,14 @@ export function PanelsPage() {
 
         farms.forEach(farm => {
           areaNames.push(farm.name);
-          // Only include panels with issues (not healthy)
           const defectivePanels = farm.grid.filter(panel => panel.status !== 'healthy' && panel.status !== 'unknown');
           panels.push(...defectivePanels);
         });
 
         setAllPanels(panels);
         setAreas(areaNames);
-
-        // Auto-save defective panels to history (only essential fields)
-        if (panels.length > 0) {
-          const history = JSON.parse(localStorage.getItem('solarops_history') || '[]');
-
-          panels.forEach(panel => {
-            // Check if this panel is already in history (avoid duplicates)
-            const alreadyExists = history.some((h: any) =>
-              h.panelId === panel.id && h.area === panel.area
-            );
-
-            if (!alreadyExists) {
-              const historyEntry = {
-                panelId: panel.id,
-                area: panel.area,
-                row: panel.row,
-                col: panel.col,
-                severity: calculateSeverity(panel),
-                recommendedAction: getRecommendedAction(panel),
-                nextMaintenance: getNextMaintenanceDate(panel),
-                defectType: panel.defectType,
-                priority: panel.priority,
-                rgbImage: panel.rgbImage || null,
-                thermalImage: panel.thermalImage || null,
-                status: panel.status,
-                coverage: panel.coverage,
-                maxTemp: panel.maxTemp,
-                deltaT: panel.deltaT,
-                crewType: panel.crewType,
-                energyLossPerDay: panel.energyLossPerDay,
-                costLossPerDay: panel.costLossPerDay,
-                efficiencyLoss: panel.efficiencyLoss,
-                maintenanceDecision: panel.maintenanceDecision,
-                peopleRequired: panel.peopleRequired
-              };
-
-              history.push(historyEntry);
-            }
-          });
-
-          localStorage.setItem('solarops_history', JSON.stringify(history));
-        }
       } catch (error) {
-        console.error('Failed to load panels:', error);
+        console.error('Failed to load panels from localStorage:', error);
       }
     }
   }, []);
@@ -514,13 +477,15 @@ export function PanelsPage() {
                             ? 'bg-gradient-to-br from-[#fef2f2] to-white border-[#fecaca]'
                             : panel.crewType === 'cleaning'
                             ? 'bg-gradient-to-br from-[#fefce8] to-white border-[#fde047]'
+                            : panel.crewType === 'inspection'
+                            ? 'bg-gradient-to-br from-[#dbeafe] to-white border-[#93c5fd]'
                             : 'bg-gradient-to-br from-[#f0fdf4] to-white border-[#86efac]'
                         }`}
                         whileHover={{ scale: 1.02 }}
                       >
                         <p className="text-xs font-semibold text-[var(--solar-text-muted)] uppercase tracking-wide mb-1">Crew Type</p>
                         <p className="font-bold text-[var(--solar-navy)] text-sm capitalize">
-                          {panel.crewType === 'repair' ? '🔧 Repair Crew' : panel.crewType === 'cleaning' ? '🧹 Cleaning Crew' : '✓ No Action'}
+                          {panel.crewType === 'repair' ? '🔧 Repair Crew' : panel.crewType === 'cleaning' ? '🧹 Cleaning Crew' : panel.crewType === 'inspection' ? '🔍 Inspection Crew' : '✓ No Action'}
                         </p>
                       </motion.div>
 
@@ -535,6 +500,31 @@ export function PanelsPage() {
                           </div>
                           <p className="font-bold text-[var(--solar-navy)] text-sm">
                             {panel.peopleRequired || 0} {panel.peopleRequired === 1 ? 'Person' : 'People'}
+                          </p>
+                        </motion.div>
+                      )}
+
+                      {panel.crewType !== 'none' && panel.maintenanceCost !== undefined && panel.maintenanceCost > 0 && (
+                        <motion.div
+                          className={`border-2 rounded-xl p-3 shadow-sm ${
+                            panel.crewType === 'repair'
+                              ? 'bg-gradient-to-br from-[#fef2f2] to-white border-[#fecaca]'
+                              : panel.crewType === 'cleaning'
+                              ? 'bg-gradient-to-br from-[#fefce8] to-white border-[#fde047]'
+                              : panel.crewType === 'inspection'
+                              ? 'bg-gradient-to-br from-[#dbeafe] to-white border-[#93c5fd]'
+                              : 'bg-gradient-to-br from-[#f0fdf4] to-white border-[#86efac]'
+                          }`}
+                          whileHover={{ scale: 1.02 }}
+                        >
+                          <div className="flex items-center gap-1 mb-1">
+                            <Coins className="w-3 h-3 text-[var(--solar-text-muted)]" />
+                            <p className="text-xs font-semibold text-[var(--solar-text-muted)] uppercase tracking-wide">
+                              Maintenance Cost
+                            </p>
+                          </div>
+                          <p className="font-bold text-[var(--solar-navy)] text-sm">
+                            {panel.maintenanceCost} SAR
                           </p>
                         </motion.div>
                       )}
@@ -585,6 +575,24 @@ export function PanelsPage() {
                         {(panel.costLossPerDay || 0).toFixed(2)}
                       </p>
                       <p className="text-sm text-[#3b82f6] font-medium">SAR/day</p>
+                    </motion.div>
+
+                    <motion.div
+                      className={`border-2 rounded-xl p-4 shadow-sm ${
+                        panel.status === 'healthy'
+                          ? 'bg-gradient-to-br from-[#f0fdf4] to-white border-[#6ee7b7]'
+                          : 'bg-gradient-to-br from-[#fef2f2] to-white border-[#fecaca]'
+                      }`}
+                      whileHover={{ scale: 1.05, y: -2 }}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Coins className={`w-5 h-5 ${panel.status === 'healthy' ? 'text-[#15803d]' : 'text-[#b91c1c]'}`} />
+                        <p className={`text-xs font-semibold uppercase tracking-wide ${panel.status === 'healthy' ? 'text-[#065f46]' : 'text-[#7f1d1d]'}`}>Monthly Financial Loss</p>
+                      </div>
+                      <p className={`text-2xl font-bold ${panel.status === 'healthy' ? 'text-[#047857]' : 'text-[#991b1b]'}`}>
+                        {panel.financialLoss || 0}
+                      </p>
+                      <p className={`text-sm font-medium ${panel.status === 'healthy' ? 'text-[#22c55e]' : 'text-[#ef4444]'}`}>SAR/month</p>
                     </motion.div>
 
                     <motion.div
