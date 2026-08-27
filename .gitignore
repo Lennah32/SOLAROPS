@@ -1,6 +1,8 @@
-# Model files (too large for GitHub)
+# Model files
 *.pt
 *.pth
+# except the fine-tuned weights the backend needs to run (54 MB, under GitHub's 100 MB limit)
+!backend/Models/*.pt
 
 # Python
 __pycache__/
