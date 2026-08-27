@@ -145,32 +145,24 @@ SolarOps/
 
 ### 1. Clone the repo
 ```bash
-git clone <your-repo-url>
-cd SolarOps
+git clone https://github.com/Lennah32/SOLAROPS.git
+cd SOLAROPS
 ```
+
+The fine-tuned YOLOv9 weights (54 MB) are committed in `backend/Models/`, so the
+clone is all you need — there is no separate model download.
 
 ### 2. Backend Setup
 
-**Option A — Use the existing virtual environment (`.venv`)**
-```bash
-# On Windows PowerShell
-.\.venv\Scripts\activate
+Create a virtual environment and install the dependencies:
 
-# On Windows CMD
-.venv\Scripts\activate.bat
-
-# On macOS/Linux
-source .venv/bin/activate
-
-cd backend
-```
-
-**Option B — Create a new virtual environment**
 ```bash
 python -m venv .venv
 
 # Activate it (Windows PowerShell)
 .\.venv\Scripts\activate
+# Windows CMD:  .venv\Scripts\activate.bat
+# macOS/Linux:  source .venv/bin/activate
 
 cd backend
 pip install -r requirements.txt
@@ -245,6 +237,23 @@ The backend runs on port `5000` and the frontend on port `5173`. They communicat
    - EasyOCR reads temperature values from the thermal image
 5. **View Results** — the specific panel in Farm View updates with its real status color, and the analysis appears in **Panels & Defects** and **History**
 
+### Sample Images
+
+The `samples/` folder contains test images for every defect class, so you can try
+the platform straight after cloning without sourcing your own photos:
+
+| File | Upload as | Expected result |
+|------|-----------|-----------------|
+| `samples/DUSTY.jpeg` | Normal (RGB) | `Dusty` |
+| `samples/BIRDY.jpeg` | Normal (RGB) | `Bird-drop` |
+| `samples/ELECTRICAL.jpeg` | Normal (RGB) | `Electrical-Damage` |
+| `samples/CRACK.jpeg`, `samples/physical.jpg` | Normal (RGB) | `Physical-Damage` |
+| `samples/NORMAAL.jpeg` | Normal (RGB) | `Non-Defective` |
+| `samples/thermal.jpeg` | Thermal | ΔT, severity level, and SAR cost estimate |
+
+The upload step expects one Normal **and** one Thermal image per panel — pair any
+RGB sample above with `samples/thermal.jpeg`.
+
 ### Supported Image Formats
 | Type | Extensions |
 |------|-----------|
@@ -258,6 +267,7 @@ The backend runs on port `5000` and the frontend on port `5173`. They communicat
 | Issue | Fix |
 |-------|-----|
 | `ModuleNotFoundError: No module named 'db'` | Make sure `backend/db.py` exists. If not, copy `Database/db.py` to `backend/db.py` |
+| Uploads return `{"error": "Model not loaded"}` and no defects are ever detected | The backend started without the weights. Confirm `backend/Models/solar_yolov9_normal_finetuned.pt` exists (54 MB) and that the startup log said `Normal model loaded successfully` — the server starts fine without it, so this failure is silent |
 | `Failed to fetch` when uploading | Check that the backend is running on port 5000 and CORS is not blocked |
 | `Unsupported image format` | Upload `.jpg`, `.png`, `.jpeg`, `.bmp`, `.tif`, `.tiff`, `.webp` files — `.rgb` and other raw formats are not supported |
 | `OCR Error: too many values to unpack` | This was a version bug. The backend now loads images through OpenCV first to avoid it |
