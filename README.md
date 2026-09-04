@@ -6,10 +6,10 @@ An advanced, economics-aware AI platform designed to detect solar panel defects 
 
 > ## ⚠️ Attribution Required
 >
-> SolarOps was built by a team of **five builders**.
+> SolarOps was built by a team of **five builders**. Aljawharah Alharbi, Areeshah Nadeem, Gala Sawyaan, Haton Alkhaldi, Lenah Alhoshan from **Prince Sultan University** as their **Senior Project*
 >
 > **Using this platform in any competition, hackathon, or judged event without
-> crediting the five builders is prohibited.** This covers the models, the
+> crediting the five builders is prohibited and may result in legal rights!** This covers the models, the
 > inference pipelines, the backend, the frontend, and the notebooks.
 >
 > See **[ATTRIBUTION.md](ATTRIBUTION.md)** for the full terms and the credit
